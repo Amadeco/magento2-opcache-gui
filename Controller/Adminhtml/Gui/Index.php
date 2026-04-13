@@ -28,14 +28,7 @@ class Index extends Action implements HttpGetActionInterface
      *
      * @see _isAllowed()
      */
-    public const ADMIN_RESOURCE = 'Amadeco_OpcacheGui::gui_index';
-
-    /**
-     * Page factory for creating result pages
-     *
-     * @var PageFactory
-     */
-    private PageFactory $resultPageFactory;
+    public const string ADMIN_RESOURCE = 'Amadeco_OpcacheGui::gui_index';
 
     /**
      * Constructor
@@ -45,9 +38,8 @@ class Index extends Action implements HttpGetActionInterface
      */
     public function __construct(
         Context $context,
-        PageFactory $resultPageFactory
+        protected readonly PageFactory $resultPageFactory
     ) {
-        $this->resultPageFactory = $resultPageFactory;
         parent::__construct($context);
     }
 

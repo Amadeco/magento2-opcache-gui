@@ -1,44 +1,34 @@
 <?php
+/**
+ * OPcache GUI API state controller
+ *
+ * @author    Ilan Parmentier
+ * @copyright Copyright © Amadeco. All rights reserved.
+ * @license   MIT License
+ */
 declare(strict_types=1);
 
 namespace Amadeco\OpcacheGui\Controller\Adminhtml\Api;
 
+use Amnuts\Opcache\Service as OpcacheService;
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
 use Magento\Framework\App\Action\HttpGetActionInterface;
-use Magento\Framework\App\CsrfAwareActionInterface;
-use Magento\Framework\App\Request\InvalidRequestException;
-use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\Result\JsonFactory;
 use Magento\Framework\Data\Form\FormKey\Validator as FormKeyValidator;
-use Amnuts\Opcache\Service as OpcacheService;
+use Psr\Log\LoggerInterface;
 
 class State extends Action implements HttpGetActionInterface
 {
-    private const ALLOWED_ACTIONS = ['poll', 'reset', 'invalidate', 'invalidate_searched'];
-    private const GET_PROXY_KEYS = ['reset', 'invalidate', 'invalidate_searched'];
+    private const array ALLOWED_ACTIONS = ['poll', 'reset', 'invalidate', 'invalidate_searched'];
+    private const array GET_PROXY_KEYS  = ['reset', 'invalidate', 'invalidate_searched'];
 
     /**
      * Authorization level of a basic admin session
      *
      * @see _isAllowed()
      */
-    public const ADMIN_RESOURCE = 'Amadeco_OpcacheGui::gui_index';
-
-    /**
-     * @var \Magento\Framework\Controller\Result\JsonFactory
-     */
-    private JsonFactory $resultJsonFactory;
-
-    /**
-     * @var \Magento\Framework\Data\Form\FormKey\Validator
-     */
-    private FormKeyValidator $formKeyValidator;
-
-    /**
-     * @var Amnuts\Opcache\Service
-     */
-    private OpcacheService $opcacheService;
+    public const string ADMIN_RESOURCE = 'Amadeco_OpcacheGui::gui_index';
 
     /**
      * Initialize dependencies.
@@ -47,25 +37,24 @@ class State extends Action implements HttpGetActionInterface
      * @param JsonFactory $resultJsonFactory
      * @param FormKeyValidator $formKeyValidator
      * @param OpcacheService $opcacheService
+     * @param LoggerInterface $logger
      */
     public function __construct(
         Context $context,
-        JsonFactory $resultJsonFactory,
-        FormKeyValidator $formKeyValidator,
-        OpcacheService $opcacheService
+        protected readonly JsonFactory $resultJsonFactory,
+        protected readonly FormKeyValidator $formKeyValidator,
+        protected readonly OpcacheService $opcacheService,
+        protected readonly LoggerInterface $logger
     ) {
         parent::__construct($context);
-        $this->resultJsonFactory = $resultJsonFactory;
-        $this->formKeyValidator  = $formKeyValidator;
-        $this->opcacheService    = $opcacheService;
     }
 
     /**
-     * Call Opcache Service actions
+     * Call Opcache Service actions.
      *
-     * @return \Magento\Framework\App\ResponseInterface
+     * @return \Magento\Framework\Controller\ResultInterface
      */
-    public function execute()
+    public function execute(): \Magento\Framework\Controller\ResultInterface
     {
         $result = $this->resultJsonFactory->create();
 
@@ -151,10 +140,14 @@ class State extends Action implements HttpGetActionInterface
                 'data' => $service->getData()
             ]);
         } catch (\Throwable $e) {
+            $this->logger->error(
+                'Amadeco_OpcacheGui: unhandled exception in State controller',
+                ['exception' => $e]
+            );
             return $result->setHttpResponseCode(500)->setData([
                 'success' => false,
-                'error' => 'EXCEPTION',
-                'message' => $e->getMessage()
+                'error'   => 'INTERNAL_ERROR',
+                'message' => 'An internal error occurred. Please check the server logs.'
             ]);
         }
     }

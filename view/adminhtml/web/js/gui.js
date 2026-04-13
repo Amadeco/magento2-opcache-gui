@@ -1,12 +1,14 @@
 define([
     'react',
     'react-dom',
+    'react-dom/client',
     'axios',
     'Magento_Ui/js/modal/alert',
     'mage/translate'
 ], function (
     React,
     ReactDOM,
+    ReactDOMClient,
     axios,
     alert,
     $t
@@ -56,7 +58,7 @@ define([
         return ("string" === r ? String : Number)(t);
     }
 
-    // --- Cache des variables CSS une seule fois (safe)
+    // Cache CSS custom properties once at module init (safe: read-only, no DOM mutation)
     const CSS_VARS = (() => {
         try {
             const root = document.documentElement;
@@ -77,7 +79,7 @@ define([
         constructor(props) {
             super(props);
             _defineProperty(this, "startTimer", () => {
-                if (this.polling) return; // garde-fou: pas de doublon
+                if (this.polling) return; // Guard: prevent duplicate polling interval
                 this.setState({ realtime: true });
                 this.polling = setInterval(() => {
 
@@ -91,9 +93,13 @@ define([
                         }
                     })
                     .then(response => {
-                        this.setState({
-                            opstate: response.data
-                        });
+                        this.setState({ opstate: response.data, fetching: false });
+                    })
+                    .catch(() => {
+                        if (this._isMounted) {
+                            this.setState({ fetching: false });
+                            this.stopTimer();
+                        }
                     });
 
                 }, this.props.realtimeRefresh * 1000);
@@ -127,14 +133,21 @@ define([
                     })
                     .then(response => {
                         if (!this._isMounted) return;
-                        console.log('success: ', response.data);
-
                         if (response.data && response.data.success) {
                             showAlert(this.txt('OPcache successfully reset.'));
                         }
+                    })
+                    .catch(() => {
+                        if (this._isMounted) {
+                            showAlert(this.txt('Reset failed. Please try again.'), this.txt('Error'));
+                            this.setState({ resetting: false });
+                        }
                     });
                 } else {
-                    window.location.href = '?reset=1';
+                    showAlert(
+                        this.txt('Please enable real-time update to use this feature.'),
+                        this.txt('Real-time required')
+                    );
                 }
             });
             _defineProperty(this, "setCookie", () => {
@@ -164,7 +177,7 @@ define([
                 resetting: false,
                 opstate: props.opstate
             };
-            this.polling = null; // null plutôt que false
+            this.polling = null; // null rather than false for explicit absence-of-timer semantics
             this.isSecure = window.location.protocol === 'https:';
             this._isMounted = false;
         }
@@ -519,14 +532,14 @@ define([
     }
 
     function UsageGraph(props) {
-        const percentage = Math.round(3.6 * props.value / 360 * 100);
+        const percentage = Math.round(props.value);
         return props.charts ? /*#__PURE__*/ React.createElement(ReactCustomizableProgressbar, {
             progress: percentage,
             radius: 100,
             strokeWidth: 30,
             trackStrokeWidth: 30,
-            strokeColor: CSS_VARS.gaugeFill,  // optimisé
-            trackStrokeColor: CSS_VARS.gaugeBg, // optimisé
+            strokeColor: CSS_VARS.gaugeFill,
+            trackStrokeColor: CSS_VARS.gaugeBg,
             gaugeId: props.gaugeId
         }) : /*#__PURE__*/ React.createElement("p", { className: "widget-value" },
             /*#__PURE__*/ React.createElement("span", { className: "large" }, percentage),
@@ -748,17 +761,21 @@ define([
                         }
                     })
                     .then(response => {
-                        console.log('success: ', response.data);
-
                         showAlert(
                             response.data && response.data.success
                                 ? this.props.txt('Invalidation requested for matching files.')
                                 : this.props.txt('Invalidation failed.'),
                             response.data && response.data.success ? null : this.props.txt('Error')
                         );
+                    })
+                    .catch(() => {
+                        showAlert(this.props.txt('Invalidation failed. Please try again.'), this.props.txt('Error'));
                     });
                 } else {
-                    window.location.href = `?invalidate_searched=${encodeURIComponent(this.state.searchTerm)}`;
+                    showAlert(
+                        this.props.txt('Please enable real-time update to use this feature.'),
+                        this.props.txt('Real-time required')
+                    );
                 }
             });
             _defineProperty(this, "changeSort", e => {
@@ -777,7 +794,7 @@ define([
                     return order === 'desc' ? comparison * -1 : comparison;
                 };
             });
-            _defineProperty(this, "onFilterChange", (e) => { // évite re-création inline
+            _defineProperty(this, "onFilterChange", (e) => { // Stable handler reference avoids inline function re-creation on each render
                 this.setSearchTerm(e.target.value);
             });
 
@@ -841,14 +858,14 @@ define([
                         txt: this.props.txt
                     }),
                     /*#__PURE__*/ React.createElement("nav", { className: "filter", "aria-label": this.props.txt('Sort order') },
-                        /*#__PURE__*/ React.createElement("select", { name: "sortBy", onChange: this.changeSort, value: this.state.sortBy },
+                        /*#__PURE__*/ React.createElement("select", { name: "sortBy", className: "admin__control-select", onChange: this.changeSort, value: this.state.sortBy },
                             /*#__PURE__*/ React.createElement("option", { value: "last_used_timestamp" }, this.props.txt('Last used')),
                             /*#__PURE__*/ React.createElement("option", { value: "last_modified" }, this.props.txt('Last modified')),
                             /*#__PURE__*/ React.createElement("option", { value: "full_path" }, this.props.txt('Path')),
                             /*#__PURE__*/ React.createElement("option", { value: "hits" }, this.props.txt('Number of hits')),
                             /*#__PURE__*/ React.createElement("option", { value: "memory_consumption" }, this.props.txt('Memory consumption'))
                         ),
-                        /*#__PURE__*/ React.createElement("select", { name: "sortDir", onChange: this.changeSort, value: this.state.sortDir },
+                        /*#__PURE__*/ React.createElement("select", { name: "sortDir", className: "admin__control-select", onChange: this.changeSort, value: this.state.sortDir },
                             /*#__PURE__*/ React.createElement("option", { value: "desc" }, this.props.txt('Descending')),
                             /*#__PURE__*/ React.createElement("option", { value: "asc" }, this.props.txt('Ascending'))
                         )
@@ -886,17 +903,21 @@ define([
                         }
                     })
                     .then(response => {
-                        console.log('success: ', response.data);
-
                         showAlert(
                             response.data && response.data.success
                                 ? this.props.txt('File invalidation requested.')
                                 : this.props.txt('File invalidation failed.'),
                             response.data && response.data.success ? null : this.props.txt('Error')
                         );
+                    })
+                    .catch(() => {
+                        showAlert(this.props.txt('File invalidation failed. Please try again.'), this.props.txt('Error'));
                     });
                 } else {
-                    window.location.href = e.currentTarget.href;
+                    showAlert(
+                        this.props.txt('Please enable real-time update to use this feature.'),
+                        this.props.txt('Real-time required')
+                    );
                 }
             });
         }
@@ -1016,7 +1037,7 @@ define([
             _defineProperty(this, "gotoPage", page => {
                 const { onPageChanged = f => f } = this.props;
                 const currentPage = Math.max(0, Math.min(page, this.totalPages()));
-                if (currentPage === this.state.currentPage) return; // évite setState inutile
+                if (currentPage === this.state.currentPage) return; // Avoid unnecessary setState when page unchanged
                 this.setState({ currentPage }, () => onPageChanged(currentPage));
             });
             _defineProperty(this, "totalPages", () => {
@@ -1208,7 +1229,7 @@ define([
     }
 
     return function bootstrap(opcacheOptions) {
-        const root = ReactDOM.createRoot(document.getElementById('interface'));
+        const root = ReactDOMClient.createRoot(document.getElementById('interface'));
         root.render(React.createElement(Interface, opcacheOptions));
     };
 });

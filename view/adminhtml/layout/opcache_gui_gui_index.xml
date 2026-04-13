@@ -9,8 +9,5 @@
 		<referenceContainer name="content">
         	<block class="Amadeco\OpcacheGui\Block\Adminhtml\Gui" name="opcache.gui" template="Amadeco_OpcacheGui::gui.phtml"/>
 		</referenceContainer>
-        <referenceContainer name="js">
-            <block class="Amadeco\OpcacheGui\Block\Adminhtml\Gui" name="opcache.gui.init" template="Amadeco_OpcacheGui::init.phtml"/>
-        </referenceContainer>
 	</body>
 </page>
