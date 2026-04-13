@@ -7,6 +7,7 @@
  * - Computes performance/warning messages for OPcache status card
  *
  * @author    Ilan Parmentier
+ * @copyright Copyright © Amadeco. All rights reserved.
  * @license   MIT License
  */
 declare(strict_types=1);
@@ -16,22 +17,16 @@ namespace Amadeco\OpcacheGui\Block\Adminhtml;
 use Amnuts\Opcache\Service as OpcacheService;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
-use Magento\Framework\Serialize\Serializer\Json as JsonSerializer;
+use Magento\Framework\Serialize\SerializerInterface;
 
-class Gui extends Template
+class Gui extends Template implements GuiInterface
 {
     /** Minimum free memory (bytes) before emitting a low-memory warning. */
-    private const MIN_FREE_MEMORY_BYTES = 32 * 1024 * 1024; // 32MB
+    private const int MIN_FREE_MEMORY_BYTES = 32 * 1024 * 1024; // 32MB
 
     /** Recommended minimum for Magento 2 projects. */
-    private const RECOMMENDED_MAX_FILES  = 50000;
-    private const RECOMMENDED_MEMORY_MB  = 256;
-
-    /** @var JsonSerializer */
-    private JsonSerializer $serializer;
-
-    /** @var OpcacheService */
-    private OpcacheService $opcacheService;
+    private const int RECOMMENDED_MAX_FILES = 50000;
+    private const int RECOMMENDED_MEMORY_MB = 256;
 
     /**
      * Cached service instance to avoid re-running handle() during a request.
@@ -55,31 +50,25 @@ class Gui extends Template
     private ?array $opcacheConfig = null;
 
     /**
-     * @param Context        $context
-     * @param JsonSerializer $serializer
-     * @param OpcacheService $opcacheService
-     * @param array<mixed>   $data
+     * Cached UI config array (built once per request).
+     *
+     * @var array<string,mixed>|null
+     */
+    private ?array $config = null;
+
+    /**
+     * @param Context             $context
+     * @param SerializerInterface $serializer
+     * @param OpcacheService      $opcacheService
+     * @param array<mixed>        $data
      */
     public function __construct(
         Context $context,
-        JsonSerializer $serializer,
-        OpcacheService $opcacheService,
+        protected readonly SerializerInterface $serializer,
+        protected readonly OpcacheService $opcacheService,
         array $data = []
     ) {
         parent::__construct($context, $data);
-        $this->serializer     = $serializer;
-        $this->opcacheService = $opcacheService;
-    }
-
-    /**
-     * Prepare block data (exposes service in $block->getData('opcache')).
-     *
-     * @return $this
-     */
-    protected function _beforeToHtml()
-    {
-        $this->setData('opcache', $this->getOpcache());
-        return parent::_beforeToHtml();
     }
 
     /**
@@ -101,7 +90,7 @@ class Gui extends Template
      * @param string $key
      * @return mixed
      */
-    public function getOpcacheOption(string $key)
+    public function getOpcacheOption(string $key): mixed
     {
         return $this->getOpcache()->getOption($key);
     }
@@ -113,7 +102,11 @@ class Gui extends Template
      */
     public function getConfig(): array
     {
-        return [
+        if ($this->config !== null) {
+            return $this->config;
+        }
+
+        $this->config = [
             'api' => [
                 'stateUrl' => $this->getUrl('opcache_gui/api/state'),
             ],
@@ -135,6 +128,8 @@ class Gui extends Template
             'realtimeRefresh' => (int)$this->getOpcacheOption('refresh_time'),
             'language'        => $this->getOpcacheOption('language_pack'),
         ];
+
+        return $this->config;
     }
 
     /**

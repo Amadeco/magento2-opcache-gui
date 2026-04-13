@@ -50,3 +50,11 @@ $perf = $block->getPerformanceData();
 </div>
 
 <div class="opcache-gui" id="interface"></div>
+
+<script type="text/x-magento-init">
+{
+    "*": {
+        "amadeco/opcache-gui": <?= /** @noEscape */ $block->getSerializedConfig() ?>
+    }
+}
+</script>
